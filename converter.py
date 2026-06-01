@@ -44,10 +44,30 @@ def get_closest_width(num_x, header_map):
 def get_ash_rate(grade, thickness_mm, length_m):
     length_cat = 1 if length_m >= 3.0 else 0
     matrix = {
-        "Super Prime White": {27:, 33:, 40:, 52:, 65:, 80:},
-        "Prime White 1 Face": {40:, 52:},
-        "Prime CND": {33:, 40:, 52:, 65:, 80:},
-        "FAS": {27:, 33:, 40:}
+        "Super Prime White": {
+            27:, 
+            33:, 
+            40:, 
+            52:, 
+            65:, 
+            80:
+        },
+        "Prime White 1 Face": {
+            40:, 
+            52:
+        },
+        "Prime CND": {
+            33:, 
+            40:, 
+            52:, 
+            65:, 
+            80:
+        },
+        "FAS": {
+            27:, 
+            33:, 
+            40:
+        }
     }
     if grade in matrix:
         t_keys = list(matrix[grade].keys())
