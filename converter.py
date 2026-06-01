@@ -4,6 +4,30 @@ import pandas as pd
 import re
 import io
 
+# --- SECURITY GATEWAY ---
+def check_password():
+    def password_entered():
+        if st.session_state["password"] == "Universal2026!":
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.set_page_config(page_title="Universal Plywoods - Login", layout="centered")
+        st.title("🔒 Timber Processing Portal")
+        st.text_input("Enter Master Password", type="password", on_change=password_entered, key="password")
+        return False
+    elif not st.session_state["password_correct"]:
+        st.title("🔒 Timber Processing Portal")
+        st.text_input("Enter Master Password", type="password", on_change=password_entered, key="password")
+        st.error("Incorrect Password. Access Denied.")
+        return False
+    return True
+
+if not check_password():
+    st.stop()
+
 # --- CONFIGURATION ---
 THICKNESS_MM = 25.4  
 
@@ -20,10 +44,30 @@ def get_closest_width(num_x, header_map):
 def get_ash_rate(grade, thickness_mm, length_m):
     length_cat = 1 if length_m >= 3.0 else 0
     matrix = {
-        "Super Prime White": {27: [1320, 1430], 33: [1320, 1430], 40: [1380, 1490], 52: [1430, 1540], 65: [1820, 1870], 80: [1980, 2040]},
-        "Prime White 1 Face": {40: [950, 1000], 52: [950, 1000]},
-        "Prime CND": {33: [870, 920], 40: [880, 940], 52: [940, 980], 65: [1050, 1090], 80: [1100, 1150]},
-        "FAS": {27: [880, 940], 33: [940, 990], 40: [960, 1130]}
+        "Super Prime White": {
+            27: (1320, 1430), 
+            33: (1320, 1430), 
+            40: (1380, 1490), 
+            52: (1430, 1540), 
+            65: (1820, 1870), 
+            80: (1980, 2040)
+        },
+        "Prime White 1 Face": {
+            40: (950, 1000), 
+            52: (950, 1000)
+        },
+        "Prime CND": {
+            33: (870, 920), 
+            40: (880, 940), 
+            52: (940, 980), 
+            65: (1050, 1090), 
+            80: (1100, 1150)
+        },
+        "FAS": {
+            27: (880, 940), 
+            33: (940, 990), 
+            40: (960, 1130)
+        }
     }
     if grade in matrix:
         t_keys = list(matrix[grade].keys())
@@ -90,7 +134,7 @@ def parse_american(pdf_file):
                 try:
                     vol_word = numeric_words[-1]
                     pcs_word = numeric_words[-2]
-                    len_word = numeric_words[0]
+                    len_word = numeric_words
                     
                     total_m3 = float(vol_word['text'])
                     total_pcs = int(float(pcs_word['text']))
@@ -127,7 +171,7 @@ def parse_american(pdf_file):
         
     return pd.DataFrame(extracted_rows)
 
-# --- EUROPEAN PARSERS (UPGRADED TO CAPTURE MIXED LOADS) ---
+# --- EUROPEAN PARSERS ---
 def parse_european(pdf_file):
     extracted_rows = []
     total_words = 0
@@ -151,7 +195,6 @@ def parse_european(pdf_file):
                 line_words = sorted(lines[y], key=lambda x: x['x0'])
                 line_text = " ".join([w['text'] for w in line_words]).strip()
                 
-                # Check for category change (e.g. "S/E EUR. OAK 27 MM")
                 if "MM" in line_text and ("OAK" in line_text or "ASH" in line_text or "BEECH" in line_text):
                     cat_match = re.search(r"(?:S/E\s+)?EUR\.?\s+(?:OAK|ASH|BEECH)\s+\d+\s*MM", line_text)
                     if cat_match:
@@ -176,7 +219,7 @@ def parse_european(pdf_file):
                                 
                         if len(numerics) >= 2:
                             try:
-                                pieces = int(float(numerics[0]))
+                                pieces = int(float(numerics))
                                 m3 = float(numerics[1])
                                 if pieces > 0 and m3 > 0 and pieces > m3:
                                     if not any(r['Bundle'] == b_text for r in extracted_rows):
@@ -192,7 +235,18 @@ def parse_european(pdf_file):
 
 def parse_european_txt(txt_file):
     extracted_rows = []
-    content = txt_file.getvalue().decode("utf-8")
+    raw_bytes = txt_file.getvalue()
+    
+    # NEW FIX: Auto-detect encoding to prevent UTF-16 OCR crashes
+    encodings = ["utf-8", "utf-16", "utf-8-sig", "latin1"]
+    content = ""
+    for enc in encodings:
+        try:
+            content = raw_bytes.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+
     lines = content.split('\n')
     
     current_category = "EUR-HARDWOOD"
@@ -200,7 +254,6 @@ def parse_european_txt(txt_file):
     
     for line in lines:
         line_clean = line.strip()
-        # Look for category change
         if "MM" in line_clean and ("OAK" in line_clean or "ASH" in line_clean or "BEECH" in line_clean):
             current_category = line_clean
             
@@ -216,7 +269,7 @@ def parse_european_txt(txt_file):
                             numerics.append(clean_num)
                 if len(numerics) >= 2:
                     try:
-                        pieces = int(float(numerics[0]))
+                        pieces = int(float(numerics))
                         m3 = float(numerics[1])
                         if pieces > 0 and m3 > 0 and pieces > m3:
                             if not any(r['Bundle'] == b_text for r in extracted_rows):
@@ -285,9 +338,6 @@ def generate_metric_list(df, is_american, enable_costing, zar_rate, species, gra
     return pd.DataFrame(piece_rows)
 
 # --- STREAMLIT UI ---
-st.set_page_config(page_title="Timber Packing List Converter", layout="wide")
-
-# --- SIDEBAR COSTING MODULE ---
 st.sidebar.header("💰 Financial Costing (Sage Valuation)")
 enable_costing = st.sidebar.checkbox("Enable CBM Costing & ZAR Conversion")
 
@@ -312,12 +362,12 @@ if enable_costing:
         base_rate = st.sidebar.number_input("Base Rate per m³ (Foreign/ZAR)", value=21500.0, step=100.0)
         st.sidebar.info("Tip: For local Tradelink shipments, enter your ZAR base rate here and leave Exchange Rate at 1.0")
 
-st.title("🌲 Timber Packing List Converter (v22)")
+st.title("🌲 Timber Packing List Converter (v25 - UTF Safe)")
 
 mode = st.radio("Select Packing List Origin:", ("American (Imperial Detail)", "European (Metric Summary)"))
 is_american = (mode == "American (Imperial Detail)")
 
-uploaded_file = st.file_uploader(f"Upload {mode.split()[0]} Document (.pdf or .txt)", type=["pdf", "txt"])
+uploaded_file = st.file_uploader(f"Upload {mode.split()} Document (.pdf or .txt)", type=["pdf", "txt"])
 
 if uploaded_file:
     file_ext = uploaded_file.name.split('.')[-1].lower()
@@ -347,7 +397,7 @@ if uploaded_file:
                 sage_df["StockCode"] = "OAK-25MM-COMSEL" if is_american else "EUR-HARDWOOD"
                 sage_df["Nett_Tally_M3"] = sage_df["Nett_Tally_M3"].round(4)
                 
-                # 2. PICKING SLIP (With Costing per piece)
+                # 2. PICKING SLIP
                 metric_df = generate_metric_list(df, is_american, enable_costing, zar_rate, species, grade, base_rate, apply_oak)
 
                 # --- SAGE FINANCIAL CALCULATIONS ---
