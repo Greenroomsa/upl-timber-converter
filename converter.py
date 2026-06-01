@@ -200,11 +200,12 @@ def parse_european(pdf_file):
                     if cat_match:
                         current_category = cat_match.group(0)
 
-                bundle_pattern = r"^(?:\d{2,4}-)?\d{4,}[A-Za-z]?$"
+                bundle_pattern = r"^(?:\d{2,4}[-\s]?)?\d{4,}[A-Za-z]?$"
                 
                 for i, w in enumerate(line_words):
-                    if re.match(bundle_pattern, w['text'].strip()):
-                        b_text = w['text'].strip()
+                    b_clean = w['text'].strip(" .,;:()[]{}'\"-")
+                    if re.match(bundle_pattern, b_clean):
+                        b_text = b_clean
                         bx = w['x0']
                         by = w['top']
                         
@@ -220,7 +221,7 @@ def parse_european(pdf_file):
                         if len(numerics) >= 2:
                             try:
                                 pieces = int(float(numerics))
-                                m3 = float(numerics[1])
+                                m3 = float(numerics)
                                 if pieces > 0 and m3 > 0 and pieces > m3:
                                     if not any(r['Bundle'] == b_text for r in extracted_rows):
                                         extracted_rows.append({
@@ -237,40 +238,44 @@ def parse_european_txt(txt_file):
     extracted_rows = []
     raw_bytes = txt_file.getvalue()
     
-    # NEW FIX: Auto-detect encoding to prevent UTF-16 OCR crashes
-    encodings = ["utf-8", "utf-16", "utf-8-sig", "latin1"]
+    encodings = ["utf-8", "utf-16", "utf-8-sig", "latin1", "cp1252"]
     content = ""
     for enc in encodings:
         try:
             content = raw_bytes.decode(enc)
-            break
-        except UnicodeDecodeError:
+            if len(content) > 10: break
+        except Exception:
             continue
-
+            
     lines = content.split('\n')
-    
     current_category = "EUR-HARDWOOD"
-    bundle_pattern = r"^(?:\d{2,4}-)?\d{4,}[A-Za-z]?$"
+    bundle_pattern = r"^(?:\d{2,4}[-\s]?)?\d{4,}[A-Za-z]?$"
     
     for line in lines:
-        line_clean = line.strip()
+        line_clean = line.strip().upper()
         if "MM" in line_clean and ("OAK" in line_clean or "ASH" in line_clean or "BEECH" in line_clean):
-            current_category = line_clean
-            
+            cat_match = re.search(r"(?:S/E\s+)?EUR[.,]?\s+(?:OAK|ASH|BEECH)\s+\d+\s*MM", line_clean)
+            if cat_match:
+                current_category = cat_match.group(0)
+            else:
+                current_category = line_clean
+                
         words = line_clean.split()
         for i, w in enumerate(words):
-            if re.match(bundle_pattern, w.strip()):
-                b_text = w.strip()
+            w_clean = w.strip(" .,;:()[]{}'\"-") 
+            
+            if re.match(bundle_pattern, w_clean):
+                b_text = w_clean
                 numerics = []
-                for j in range(1, 10):
+                for j in range(1, 16):
                     if i + j < len(words):
-                        clean_num = words[i+j].replace(',', '.').strip(" .")
+                        clean_num = words[i+j].replace(',', '.').strip(" .,;:()\"'")
                         if clean_num.replace('.', '', 1).isdigit():
                             numerics.append(clean_num)
                 if len(numerics) >= 2:
                     try:
                         pieces = int(float(numerics))
-                        m3 = float(numerics[1])
+                        m3 = float(numerics)
                         if pieces > 0 and m3 > 0 and pieces > m3:
                             if not any(r['Bundle'] == b_text for r in extracted_rows):
                                 extracted_rows.append({
@@ -362,7 +367,7 @@ if enable_costing:
         base_rate = st.sidebar.number_input("Base Rate per m³ (Foreign/ZAR)", value=21500.0, step=100.0)
         st.sidebar.info("Tip: For local Tradelink shipments, enter your ZAR base rate here and leave Exchange Rate at 1.0")
 
-st.title("🌲 Timber Packing List Converter (v25 - UTF Safe)")
+st.title("🌲 Timber Packing List Converter (v26 Diagnostic)")
 
 mode = st.radio("Select Packing List Origin:", ("American (Imperial Detail)", "European (Metric Summary)"))
 is_american = (mode == "American (Imperial Detail)")
@@ -387,7 +392,15 @@ if uploaded_file:
                     df = parse_european(uploaded_file)
             
             if df.empty:
-                st.error("No data found. Ensure you selected the correct Origin above.")
+                st.error("⚠️ No data found. Ensure you selected the correct Origin above.")
+                # --- NEW DIAGNOSTIC PANEL ---
+                with st.expander("🛠️ Diagnostics: Click here to see what the app read"):
+                    st.write("The app opened the file, but the OCR formatting might be corrupted. Here is the raw text the system sees:")
+                    if file_ext == 'txt':
+                        content = uploaded_file.getvalue().decode('utf-8', errors='ignore')
+                        st.text(content[:1500])
+                    else:
+                        st.write("This was a PDF file. The layout may not match standard Florian templates. Try converting it to TXT using an online OCR tool first.")
             else:
                 st.success(f"Success! Processed {len(df)} bundles.")
 
