@@ -4,33 +4,33 @@ import pandas as pd
 import re
 import io
 
-# --- SECURITY GATEWAY ---
-def check_password():
-    def password_entered():
-        if st.session_state["password"] == "Universal2026!":
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]
-        else:
-            st.session_state["password_correct"] = False
+# --- CONFIGURATION (MUST BE FIRST) ---
+st.set_page_config(page_title="Universal Plywoods", layout="wide")
+THICKNESS_MM = 25.4  
 
+# --- SECURITY GATEWAY WITH LOGIN BUTTON ---
+def check_password():
     if "password_correct" not in st.session_state:
-        st.set_page_config(page_title="Universal Plywoods - Login", layout="centered")
+        st.session_state["password_correct"] = False
+
+    if not st.session_state["password_correct"]:
         st.title("🔒 Timber Processing Portal")
-        st.text_input("Enter Master Password", type="password", on_change=password_entered, key="password")
-        return False
-    elif not st.session_state["password_correct"]:
-        st.title("🔒 Timber Processing Portal")
-        st.text_input("Enter Master Password", type="password", on_change=password_entered, key="password")
-        st.error("Incorrect Password. Access Denied.")
+        with st.form("login_form"):
+            pwd = st.text_input("Enter Master Password", type="password")
+            submitted = st.form_submit_button("Login")
+            if submitted:
+                if pwd == "Universal2026!":
+                    st.session_state["password_correct"] = True
+                    st.rerun()
+                else:
+                    st.error("Incorrect Password. Access Denied.")
         return False
     return True
 
 if not check_password():
     st.stop()
 
-# --- CONFIGURATION ---
-THICKNESS_MM = 25.4  
-
+# --- HELPER FUNCTIONS ---
 def round_to_nearest_5(value):
     return int(round(value / 5.0) * 5)
 
@@ -367,7 +367,7 @@ if enable_costing:
         base_rate = st.sidebar.number_input("Base Rate per m³ (Foreign/ZAR)", value=21500.0, step=100.0)
         st.sidebar.info("Tip: For local Tradelink shipments, enter your ZAR base rate here and leave Exchange Rate at 1.0")
 
-st.title("🌲 Timber Packing List Converter (v26 Diagnostic)")
+st.title("🌲 Timber Packing List Converter (v27 Button Update)")
 
 mode = st.radio("Select Packing List Origin:", ("American (Imperial Detail)", "European (Metric Summary)"))
 is_american = (mode == "American (Imperial Detail)")
@@ -400,7 +400,7 @@ if uploaded_file:
                         content = uploaded_file.getvalue().decode('utf-8', errors='ignore')
                         st.text(content[:1500])
                     else:
-                        st.write("This was a PDF file. The layout may not match standard Florian templates. Try converting it to TXT using an online OCR tool first.")
+                        st.write("This was a PDF file. The layout may not match standard templates. Try converting it to TXT using an online OCR tool first.")
             else:
                 st.success(f"Success! Processed {len(df)} bundles.")
 
