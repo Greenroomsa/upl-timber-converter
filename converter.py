@@ -332,7 +332,7 @@ if enable_costing:
         base_rate = st.sidebar.number_input("Base Rate per m³ (Foreign/ZAR)", value=21500.0, step=100.0)
         st.sidebar.info("Tip: For local Tradelink shipments, enter your ZAR base rate here and leave Exchange Rate at 1.0")
 
-st.title("🌲 Timber Packing List Converter (v23)")
+st.title("🌲 Timber Packing List Converter (v23 Final)")
 
 mode = st.radio("Select Packing List Origin:", ("American (Imperial Detail)", "European (Metric Summary)"))
 is_american = (mode == "American (Imperial Detail)")
